@@ -1,0 +1,9 @@
+node_modules
+# macOS Finder
+.DS_Store
+**/.DS_Store
+
+# IntelliJ IDEA
+.idea/
+*.iml
+

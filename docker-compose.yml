@@ -1,0 +1,80 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    # take environment variables from the .env file here
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${DB_NAME}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASS}
+      SYNTHEA_DIRECTORY: ${SYNTHEA_DIRECTORY}
+      SYNTHEA_OUTPUT_DIRECTORY: ${SYNTHEA_OUTPUT_DIRECTORY}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+    depends_on:
+      - db
+      - synthea
+    volumes:
+      - ./synthea:/synthea
+      #isolates gradle cache to prevent gradle lock
+      - synthea_gradle_cache:/synthea/.gradle
+    networks:
+      - syntheanetwork
+
+  frontend:
+    build:
+      context: ./frontend
+      #dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
+    ports:
+      #- "3000:80"
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    depends_on:
+      - backend
+    networks:
+      - syntheanetwork
+
+  synthea:
+    image: gradle:8.10.2-jdk17
+    container_name: synthea
+    working_dir: /synthea
+    volumes:
+      - ./synthea:/synthea
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        chmod +x /synthea/gradlew
+        chmod +x /synthea/run_synthea
+        gradle build -x test -x checkstyleMain -x javadoc --no-daemon --warning-mode none
+    networks:
+      - syntheanetwork
+
+  db:
+    image: postgres:14
+    container_name: postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks:
+      - syntheanetwork
+
+volumes:
+  db_data:
+  #separated volume for backend synthea gradle cache
+  synthea_gradle_cache:
+
+networks:
+  syntheanetwork:
