@@ -63,3 +63,7 @@ For Docker-Compose: [https://docs.docker.com/compose/install/](https://docs.dock
 ## Contact
 
 For inquiries, please contact Dr. Adnan Jouned: adnan.jouned@meduniwien.ac.at
+
+## Licence / Credits
+This work is licensed under the Apache License Version 2.0.  
+Use the citation provided in [CITATION.cff](CITATION.cff).

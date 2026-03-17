@@ -1,0 +1,49 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: >-
+  SyntheaWeb: A Web-Based Platform for the Generation and
+  Interactive Inspection of Synthetic Healthcare Data
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - family-names: JOUNED
+    given-names: Adnan
+    affiliation: >-
+      Institute of Medical Information Management, Center
+      for Medical Data Science, Medical University of
+      Vienna, Vienna, Austria
+    orcid: 'https://orcid.org/0000-0001-7777-7545'
+    email: adnan.jouned@meduniwien.ac.at
+  - family-names: SCHUBERT
+    given-names: Maximilian
+    affiliation: >-
+      Institute of Medical Information Management, Center
+      for Medical Data Science, Medical University of
+      Vienna, Vienna, Austria
+  - given-names: Elena
+    family-names: KAPPEL
+    affiliation: >-
+      Institute of Medical Information Management, Center
+      for Medical Data Science, Medical University of
+      Vienna, Vienna, Austria
+  - given-names: Florian
+    family-names: KATSCH
+    affiliation: >-
+      Institute of Medical Information Management, Center
+      for Medical Data Science, Medical University of
+      Vienna, Vienna, Austria
+    orcid: 'https://orcid.org/0000-0001-7952-9326'
+  - given-names: Georg
+    family-names: DUFTSCHMID
+    affiliation: >-
+      Institute of Medical Information Management, Center
+      for Medical Data Science, Medical University of
+      Vienna, Vienna, Austria
+    orcid: 'https://orcid.org/0000-0001-8007-0735'
+repository-code: 'https://github.com/adnanjoun/web_synth'
+url: 'https://mimapps.meduniwien.ac.at/syntheaweb'
+license: Apache-2.0
