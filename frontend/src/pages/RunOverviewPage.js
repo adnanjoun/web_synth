@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, useCallback } from "react";
 import * as mui from "@mui/material";
 import RunList from "../components/lists/RunList";
 import {
@@ -8,23 +8,29 @@ import {
 } from "../services/runs/generatedRunService";
 import { AuthContext } from "../AuthContext";
 import { useSnackbar } from "../components/SnackbarProvider";
-import Layout from "../components/layout/Layout"; // Snackbar hook
+import Layout from "../components/layout/Layout";
+import { useNavigate } from "react-router-dom";
+import patientService from "../services/runs/patientService";
+import downloadService from "../services/runs/downloadService";
+import favoritesService from "../services/runs/favoritesService";
 
 const RunOverviewPage = () => {
   const { user } = useContext(AuthContext);
   const { showSnackbar } = useSnackbar();
+  const navigate = useNavigate();
+
   const [runs, setRuns] = useState([]);
   const [error, setError] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [runToDelete, setRunToDelete] = useState(null);
+  const [runFavoriteStatus, setRunFavoriteStatus] = useState({});
+  const [dbFavorites, setDbFavorites] = useState([]);
+  const [partialDialogOpen, setPartialDialogOpen] = useState(false);
+  const [runToResolve, setRunToResolve] = useState(null);
 
   // Check if current user is an admin
   const isAdmin = user?.role === "ADMIN";
 
-  /**
-   * Fetch runs on component mount.
-   * Admin fetches all runs, users fetch only their own runs.
-   */
   useEffect(() => {
     const fetchRuns = async () => {
       try {
@@ -35,14 +41,24 @@ const RunOverviewPage = () => {
         showSnackbar("Error loading runs.", "error");
       }
     };
-    fetchRuns()
-      .then(() => {
-        console.log("Runs successfully fetched.");
-      })
-      .catch((error) => {
-        console.error("Error during fetching: ", error);
-      });
+    fetchRuns().catch((err) => console.error("Fetch runs failed", err));
   }, [isAdmin, showSnackbar]);
+
+  const fetchDbFavorites = useCallback(async () => {
+    try {
+      const favs = await favoritesService.getFavorites();
+      setDbFavorites(Array.isArray(favs) ? favs : []);
+    } catch (e) {
+      console.error("Error fetching favorites:", e);
+      setDbFavorites([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDbFavorites();
+  }, [fetchDbFavorites]);
+
+
 
   const openDeleteDialog = (runId) => {
     setRunToDelete(runId);
@@ -54,10 +70,6 @@ const RunOverviewPage = () => {
     setDeleteDialogOpen(false);
   };
 
-  /**
-   * confirmDelete
-   * Deletes a run after confirmation and updates the run list.
-   */
   const confirmDelete = async () => {
     if (!runToDelete) return;
     try {
@@ -71,86 +83,217 @@ const RunOverviewPage = () => {
     }
   };
 
-  /**
-   * handleDownload
-   * Initiates file download for the given run ID and format.
-   * Displays an info snackbar on start or an error snackbar if it fails.
-   */
   const handleDownload = async (runId, format) => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      showSnackbar("Error: Not authenticated!", "error");
-      return;
-    }
+
+    const isReady = await checkRunHasData(runId);
+    if (!isReady) return;
 
     showSnackbar(`Download of ${format.toUpperCase()} started.`, "info");
-
     try {
-      const response = await fetch(
-        `http://localhost:8080/api/synthea/download?runID=${runId}&format=${format}`,
-        {
-          method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Download error: ${response.statusText}`);
-      }
-
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(new Blob([blob]));
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-      a.download = `${runId}_${format}.zip`;
-      a.click();
+      await downloadService.downloadRunExport(runId, format);
     } catch (error) {
       console.error("Download error:", error);
       showSnackbar("Error downloading the file!", "error");
     }
   };
 
+
+  useEffect(() => {
+    if (runs.length === 0 || !Array.isArray(dbFavorites)) return;
+
+    const status = {};
+    runs.forEach((run) => {
+      const runId = run.runId;
+      const total = run.populationSize || 0;
+
+      const savedCount = dbFavorites.filter((p) => p.runId === runId).length;
+
+      if (savedCount === 0) {
+        status[runId] = "none";
+      } else if (total > 0 && savedCount >= total) {
+        status[runId] = "full";
+      } else {
+        status[runId] = "partial";
+      }
+    });
+
+    setRunFavoriteStatus(status);
+  }, [runs, dbFavorites]);
+
+
+  const removeAllFavoritesForRun = async (runId) => {
+    showSnackbar("Removing favorites...", "info");
+    const success = await favoritesService.removeRunFavorites(runId);
+
+    if (success) {
+      showSnackbar("Favorites removed.", "info");
+      await fetchDbFavorites();
+    } else {
+      showSnackbar("Could not remove favorites.", "error");
+    }
+  };
+
+  const saveAllFavoritesForRun = async (runId) => {
+    showSnackbar("Saving patients to database...", "info");
+    try {
+      const pagedResponse = await patientService.getPatientsByRunId(runId, 0, 10000);
+      const fetchedPatients = pagedResponse.patients;
+
+      const patientsToSave = fetchedPatients.map((p) => ({
+        ...p,
+        runId: runId,
+        patientId: p.patientId,
+      }));
+
+      const success = await favoritesService.saveFavorites(patientsToSave);
+
+      if (success) {
+        showSnackbar(`Saved ${patientsToSave.length} patients to database`, "success");
+        await fetchDbFavorites();
+      } else {
+        showSnackbar("Failed to save patients", "error");
+      }
+    } catch (error) {
+      console.error("Error saving patients:", error);
+      showSnackbar("Could not save patients", "error");
+    }
+  };
+
+  const handleFavorite = async (runId) => {
+    const isReady = await checkRunHasData(runId);
+    if (!isReady) return;
+
+    const currentStatus = runFavoriteStatus[runId] || "none";
+
+    if (currentStatus === "full") {
+      await removeAllFavoritesForRun(runId);
+
+    } else if (currentStatus === "none") {
+      await saveAllFavoritesForRun(runId);
+
+    } else if (currentStatus === "partial") {
+      setRunToResolve(runId);
+      setPartialDialogOpen(true);
+    }
+  };
+
+  const handleConfirmAddMissing = async () => {
+    if (runToResolve) {
+      setPartialDialogOpen(false);
+      await saveAllFavoritesForRun(runToResolve);
+      setRunToResolve(null);
+    }
+  };
+
+  const handleConfirmRemoveAll = async () => {
+    if (runToResolve) {
+      setPartialDialogOpen(false);
+      await removeAllFavoritesForRun(runToResolve);
+      setRunToResolve(null);
+    }
+  };
+
+  const handleClosePartialDialog = () => {
+    setPartialDialogOpen(false);
+    setRunToResolve(null);
+  };
+
+  const handleViewPatients = async (runId) => {
+    const isReady = await checkRunHasData(runId);
+    if (!isReady) return;
+
+    navigate(`/patients/${runId}`);
+    console.log("View patients clicked for run: ", runId);
+  };
+
+  const checkRunHasData = async (runId) => {
+    try {
+      const response = await patientService.getPatientsByRunId(runId, 0, 1);
+      const hasData = response && response.totalElements > 0;
+
+      if (!hasData) {
+        showSnackbar("Run is still generating... Please wait.", "warning");
+      }
+      return hasData;
+    } catch (e) {
+      console.error("Check run data failed", e);
+      showSnackbar("Could not verify run status.", "error");
+      return false;
+    }
+  };
+
   return (
-    <Layout>
-      <mui.Typography variant="h2" gutterBottom textAlign="center" margin={4}>
-        Generated Runs
-      </mui.Typography>
-
-      {error ? (
-        <mui.Typography color="error" textAlign="center">
-          There was an error. Please try again later.
+      <Layout>
+        <mui.Typography variant="h2" gutterBottom textAlign="center" margin={4}>
+          Generated Runs
         </mui.Typography>
-      ) : (
-        <RunList
-          runs={runs}
-          isAdmin={isAdmin}
-          onDelete={openDeleteDialog}
-          onDownload={handleDownload}
-        />
-      )}
 
-      <mui.Dialog
-        open={deleteDialogOpen}
-        onClose={closeDeleteDialog}
-        aria-labelledby="delete-dialog-title"
-        aria-describedby="delete-dialog-description"
-      >
-        <mui.DialogTitle id="delete-dialog-title">
-          Confirm deletion
-        </mui.DialogTitle>
-        <mui.DialogContent>
-          <mui.DialogContentText id="delete-dialog-description">
-            Do you really want to delete this run? This action cannot be undone.
-          </mui.DialogContentText>
-        </mui.DialogContent>
-        <mui.DialogActions>
-          <mui.Button onClick={closeDeleteDialog}>Cancel</mui.Button>
-          <mui.Button onClick={confirmDelete} color="error" variant="contained">
-            Delete
-          </mui.Button>
-        </mui.DialogActions>
-      </mui.Dialog>
-    </Layout>
+        {error ? (
+            <mui.Typography color="error" textAlign="center">
+              There was an error. Please try again later.
+            </mui.Typography>
+        ) : (
+            <RunList
+                runs={runs}
+                isAdmin={isAdmin}
+                onDelete={openDeleteDialog}
+                onDownload={handleDownload}
+                onFavorite={handleFavorite}
+                onViewPatients={handleViewPatients}
+                runFavoriteStatus={runFavoriteStatus}
+            />
+        )}
+
+        <mui.Dialog
+            open={deleteDialogOpen}
+            onClose={closeDeleteDialog}
+            aria-labelledby="delete-dialog-title"
+            aria-describedby="delete-dialog-description"
+        >
+          <mui.DialogTitle id="delete-dialog-title">
+            Confirm deletion
+          </mui.DialogTitle>
+          <mui.DialogContent>
+            <mui.DialogContentText id="delete-dialog-description">
+              Do you really want to delete this run? This action cannot be undone.
+            </mui.DialogContentText>
+          </mui.DialogContent>
+          <mui.DialogActions>
+            <mui.Button onClick={closeDeleteDialog}>Cancel</mui.Button>
+            <mui.Button onClick={confirmDelete} color="error" variant="contained">
+              Delete
+            </mui.Button>
+          </mui.DialogActions>
+        </mui.Dialog>
+        <mui.Dialog
+            open={partialDialogOpen}
+            onClose={handleClosePartialDialog}
+        >
+          <mui.DialogTitle>Manage Favorites</mui.DialogTitle>
+          <mui.DialogContent>
+            <mui.DialogContentText>
+              This run is partially saved. Do you want to save the missing patients or remove the existing ones?
+            </mui.DialogContentText>
+          </mui.DialogContent>
+          <mui.DialogActions sx={{ justifyContent: "space-between", px: 3, pb: 2 }}>
+            <mui.Box sx={{ display: 'flex', gap: 1 }}>
+              <mui.Button
+                  onClick={handleConfirmAddMissing}>
+                Add Missing
+              </mui.Button>
+              <mui.Button
+                  onClick={handleConfirmRemoveAll}>
+                Remove All
+              </mui.Button>
+            </mui.Box>
+
+            <mui.Button onClick={handleClosePartialDialog}>
+              Cancel
+            </mui.Button>
+          </mui.DialogActions>
+        </mui.Dialog>
+
+      </Layout>
   );
 };
 

@@ -15,12 +15,16 @@ import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import RunOverviewPage from "./pages/RunOverviewPage";
 import ProtectedRoute from "./components/routes/ProtectedRoute";
-import ProtectedAdminRoute from "./components/routes/ProtectedAdminRoute"; // NEU: Geschützte Adminroute
+import ProtectedAdminRoute from "./components/routes/ProtectedAdminRoute";
 import { AuthProvider } from "./AuthContext";
 import AdminPage from "./pages/AdminPage";
 import AboutPage from "./pages/AboutPage";
 import Footer from "./components/layout/Footer";
 import { SnackbarProvider } from "./components/SnackbarProvider";
+import PatientsPage from "./pages/PatientsPage";
+import FavoritePatientsPage from "./pages/FavoritePatientsPage";
+import DetailedPatientViewPage from "./pages/DetailedPatientViewPage";
+
 
 function App() {
   return (
@@ -52,6 +56,9 @@ function App() {
                       <Route path="/" element={<HomePage />} />
                       <Route path="/generate" element={<GeneratePage />} />
                       <Route path="/runs" element={<RunOverviewPage />} />
+                      <Route path="/patients/:runId" element={<PatientsPage />} />
+                      <Route path="/favorites" element={<FavoritePatientsPage />} />
+                      <Route path="/patients/:runId/patient/:patientId" element={<DetailedPatientViewPage />} />
                     </Route>
                     <Route element={<ProtectedAdminRoute />}>
                       <Route path="/admin" element={<AdminPage />} />

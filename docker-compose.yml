@@ -18,15 +18,24 @@ services:
       - synthea
     volumes:
       - ./synthea:/synthea
+      #isolates gradle cache to prevent gradle lock
+      - synthea_gradle_cache:/synthea/.gradle
     networks:
       - syntheanetwork
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      #dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     ports:
-      - "3000:80"
+      #- "3000:80"
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
     depends_on:
       - backend
     networks:
@@ -58,12 +67,14 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     networks:
       - syntheanetwork
 
 volumes:
   db_data:
+  #separated volume for backend synthea gradle cache
+  synthea_gradle_cache:
 
 networks:
   syntheanetwork:

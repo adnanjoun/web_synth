@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.security.Principal;
 
 /**
  * Service for handling user-related operations, including authentication, registration, and administrative tasks.
@@ -212,5 +213,14 @@ public class UserService implements UserDetailsService {
     private User getUserById(UUID id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("User not found."));
+    }
+
+    public User getUserByPrincipal(Principal principal) {
+        if (principal == null) {
+            throw new RuntimeException("Principal is null. User is not authenticated.");
+        }
+        String username = principal.getName();
+
+        return userRepository.findByUsername(username).orElseThrow(() -> new RuntimeException("User not found: " + username));
     }
 }

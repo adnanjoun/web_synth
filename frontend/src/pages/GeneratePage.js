@@ -1,14 +1,12 @@
 import React, { useState, useContext } from "react";
 import GenerateForm from "../components/forms/GenerateForm";
 import * as mui from "@mui/material";
-import { saveRun } from "../services/runs/generatedRunService";
 import axios from "axios";
 import { AuthContext } from "../AuthContext";
 import { useSnackbar } from "../components/SnackbarProvider";
 import Layout from "../components/layout/Layout";
 
 function GeneratePage() {
-  const { user } = useContext(AuthContext);
   const { showSnackbar } = useSnackbar();
 
   const [generateOptions, setGenerateOptions] = useState({
@@ -40,6 +38,7 @@ function GeneratePage() {
    * 1) minAge and maxAge must both be filled if one is filled.
    * 2) minAge <= maxAge.
    * 3) Neither minAge nor maxAge can be negative.
+   * 4) MaxAge cannot be greater than 120.
    */
   const minAgeValue =
     generateOptions.minAge !== "" ? parseInt(generateOptions.minAge) : null;
@@ -53,9 +52,20 @@ function GeneratePage() {
   const isAgeRangeInvalid =
     minAgeValue !== null &&
     maxAgeValue !== null &&
-    (minAgeValue > maxAgeValue || minAgeValue < 0 || maxAgeValue < 0);
+    (minAgeValue > maxAgeValue || minAgeValue < 0 || maxAgeValue < 0 || maxAgeValue > 120);
 
   const isAgeInvalid = isAgeEmptyMismatch || isAgeRangeInvalid;
+
+  let ageErrorMessage = "";
+  if(isAgeInvalid) {
+    if (maxAgeValue > 120) {
+        ageErrorMessage = "Maximum Age cannot exceed 120 years.";
+    } else if (minAgeValue !== null && maxAgeValue !== null && minAgeValue > maxAgeValue) {
+        ageErrorMessage = ("Min Age cannot be greater than Max Age.");
+    } else {
+        ageErrorMessage = "Both Min Age and Max Age must be filled correctly.";
+    }
+  }
 
   /**
    * isPopulationSizeInvalid
@@ -90,7 +100,7 @@ function GeneratePage() {
           gender:
             generateOptions.gender !== "all" ? generateOptions.gender : null,
           minAge: generateOptions.minAge || null,
-          maxAge: generateOptions.maxAge || null,
+          maxAge: generateOptions.maxAge || 120,
           state: generateOptions.state || null,
           city: generateOptions.city || null,
         },
@@ -108,13 +118,6 @@ function GeneratePage() {
       const endTime = Date.now();
       const elapsedTime = ((endTime - startTime) / 1000).toFixed(2);
       setGenerationTime(elapsedTime);
-
-      await saveRun({
-        runId: response.data.runID,
-        userId: user?.id,
-        ...generateOptions,
-      });
-
       showSnackbar(
         "Synthetic data generated and saved successfully!",
         "success"
@@ -191,6 +194,7 @@ function GeneratePage() {
         downloading={downloading}
         generationTime={generationTime}
         isAgeInvalid={isAgeInvalid}
+        ageErrorMessage={ageErrorMessage}
         isPopulationSizeInvalid={isPopulationSizeInvalid}
         isFormInvalid={isFormInvalid}
       />

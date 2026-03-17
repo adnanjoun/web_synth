@@ -6,9 +6,12 @@ import {
   ArrowUpward,
   ArrowDownward,
   Search,
+  FavoriteBorder,
+  Favorite,
+  Visibility,
 } from "@mui/icons-material";
 
-const RunList = ({ runs, isAdmin, onDelete, onDownload }) => {
+const RunList = ({ runs, isAdmin, onDelete, onDownload, onFavorite, onViewPatients, runFavoriteStatus = {}, }) => {
   // anchorEl manages the position of the download menu
   const [anchorEl, setAnchorEl] = useState(null);
 
@@ -160,7 +163,8 @@ const RunList = ({ runs, isAdmin, onDelete, onDownload }) => {
               {sortedRuns.map((run) => (
                 <mui.TableRow key={run.runId} hover>
                   <mui.TableCell>
-                    {new Date(run.createdAt).toLocaleString()}
+                    {/*time is always saved as UTC in backend*/}
+                    {new Date(run.createdAt+'Z').toLocaleString()}
                   </mui.TableCell>
                   <mui.TableCell>{run.populationSize || 1}</mui.TableCell>
                   <mui.TableCell>
@@ -181,6 +185,23 @@ const RunList = ({ runs, isAdmin, onDelete, onDownload }) => {
                   )}
 
                   <mui.TableCell align="center">
+                    <mui.IconButton onClick={() => onFavorite(run.runId)}>
+                      {(() => {
+                        const status = runFavoriteStatus[run.runId] || "none";
+                        if (status === "full") {
+                          return <Favorite />;
+                        }
+                        if (status === "partial") {
+                          return <Favorite sx={{ opacity: 0.1 }} />;
+                        }
+                        return <FavoriteBorder />;
+                      })()}
+                    </mui.IconButton>
+
+                    <mui.IconButton onClick={() => onViewPatients(run.runId)}>
+                      <Visibility />
+                    </mui.IconButton>
+
                     <mui.IconButton
                       onClick={(event) => handleMenuOpen(event, run.runId)}
                     >
@@ -215,7 +236,7 @@ const RunList = ({ runs, isAdmin, onDelete, onDownload }) => {
           Download CSV
         </mui.MenuItem>
         <mui.MenuItem onClick={() => handleDownload("fhir")}>
-          Download FHIR
+          Download FHIR (JSON)
         </mui.MenuItem>
       </mui.Menu>
     </>

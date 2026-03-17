@@ -41,26 +41,6 @@ export const getAllRuns = async () => {
 };
 
 /**
- * saveRun
- * Sends newly generated run data to the server to be stored in database.
- *
- * @param {Object} runData - The run information to be saved.
- * @returns {Promise<Object>} - The saved run details.
- * @throws an error if the request fails.
- */
-export const saveRun = async (runData) => {
-  try {
-    const token = localStorage.getItem("token");
-    const response = await axios.post(`${API_URL}/save`, runData, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || "Error while saving the run.";
-  }
-};
-
-/**
  * deleteRun
  * Deletes the specified run from the server.
  *

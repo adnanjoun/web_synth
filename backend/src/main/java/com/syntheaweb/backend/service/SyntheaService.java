@@ -1,43 +1,40 @@
 package com.syntheaweb.backend.service;
 
-import java.io.*;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.syntheaweb.backend.database.entity.Patient;
+import com.syntheaweb.backend.database.entity.Run;
+import com.syntheaweb.backend.database.repository.PatientRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import com.syntheaweb.backend.service.StorageService;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.time.LocalDate;
+import java.time.Period;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.Objects;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
+import java.util.Optional;
 
-import org.springframework.stereotype.Service;
 
-/**
- * Service responsible for handling Synthea synthetic data operations,
- * including generation, compression, and deletion.
- */
 @Service
 public class SyntheaService {
 
     private static final String SYNTHEA_DIRECTORY = "/synthea/";
-    private static final String SYNTHEA_OUTPUT_DIRECTORY = "/synthea/output/";
-    private static final String DATAFORMAT_CSV = "csv";
-    private static final String DATAFORMAT_FHIR = "fhir";
 
+    @Autowired
+    private PatientRepository patientRepository;
 
-    /**
-     * Generates synthetic data based on the provided parameters.
-     *
-     * @param populationSize The number of patients to generate.
-     * @param gender         The gender of the patients ("M" or "F").
-     * @param minAge         The minimum age of patients.
-     * @param maxAge         The maximum age of patients.
-     * @param state          The state for patient generation.
-     * @param city           The city for patient generation.
-     * @return The ID of the generated run.
-     * @throws IOException          If there is an issue during execution.
-     * @throws InterruptedException If the generation process is interrupted.
-     */
-    public String generateSyntheticData(Integer populationSize, String gender, Integer minAge, Integer maxAge, String state, String city) throws IOException, InterruptedException {
+    @Autowired
+    private StorageService storageService;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public void generateSyntheticData(String runId, Integer populationSize, String gender, Integer minAge, Integer maxAge, String state, String city) throws IOException, InterruptedException {
         ProcessBuilder processBuilder = new ProcessBuilder("./run_synthea");
-
         addPopulationParameter(processBuilder, populationSize);
         addGenderParameter(processBuilder, gender);
         addAgeParameter(processBuilder, minAge, maxAge);
@@ -47,156 +44,149 @@ public class SyntheaService {
         processBuilder.redirectErrorStream(true);
         Process process = processBuilder.start();
 
-        // comment this part out to hide synthea output
+        /*
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 System.out.println(line);
             }
         }
+        */
 
         int exitCode = process.waitFor();
-
         if (exitCode != 0) {
             throw new RuntimeException("Error occurred while generating synthetic data.");
         }
 
-        // this needs to change for multiple user support!
-        return getLatestRunIDFolder();
+        moveGeneratedOutputToRunFolder(runId, "fhir");
+        moveGeneratedOutputToRunFolder(runId, "csv");
     }
 
-    /**
-     * Retrieves the zipped folder for the generated CSV format if needed.
-     *
-     * @param runID The ID of the generated run.
-     * @return A File representing the zipped folder.
-     * @throws IOException If an error occurs during the zipping process.
-     */
-    public File zipCSVFolderIfNeeded(String runID) throws IOException {
-        return zipFolderIfNeeded(runID, DATAFORMAT_CSV);
-    }
 
-    /**
-     * Retrieves the zipped folder for the generated FHIR format if needed.
-     *
-     * @param runID The ID of the generated run.
-     * @return A File representing the zipped folder.
-     * @throws IOException If an error occurs during the zipping process.
-     */
-    public File zipFHIRFolderIfNeeded(String runID) throws IOException {
-        return zipFolderIfNeeded(runID, DATAFORMAT_FHIR);
-    }
+    private void moveGeneratedOutputToRunFolder(String runId, String format) {
+        File outputRoot = storageService.getOutputRoot(format);
 
-    /**
-     * Deletes all files and folders associated with a specific run ID.
-     *
-     * @param runId The ID of the run to delete.
-     */
-    public void deleteRunFiles(String runId) {
-        Arrays.asList(DATAFORMAT_CSV, DATAFORMAT_FHIR).forEach(format -> {
-            File runFolder = new File(SYNTHEA_OUTPUT_DIRECTORY + format + "/" + runId);
-            if (runFolder.exists()) {
-                deleteFolder(runFolder);
+        if (!outputRoot.exists()) return;
+
+        File[] directories = outputRoot.listFiles(File::isDirectory);
+        if (directories != null) {
+            Optional<File> latestDir = Arrays.stream(directories)
+                    .filter(f -> !f.getName().equals(runId))
+                    .max(Comparator.comparingLong(File::lastModified));
+
+            if (latestDir.isPresent()) {
+                File createdFolder = latestDir.get();
+                File targetFolder = storageService.getRunDirectory(runId, format);
+                createdFolder.renameTo(targetFolder);
             }
+        }
+    }
 
-            File zipFile = new File(SYNTHEA_OUTPUT_DIRECTORY + format + "/" + runId + "_" + format + ".zip");
-            if (zipFile.exists()) {
-                zipFile.delete();
+
+    public void parseAndPersistPatients(String runId, Run runEntity) {
+        File runDirectory = storageService.getRunDirectory(runId, "fhir");
+
+        if (!runDirectory.exists() || !runDirectory.isDirectory()) {
+            System.err.println("No Output Directory found for run: " + runId);
+            return;
+        }
+
+        File[] files = runDirectory.listFiles((dir, name) -> name.endsWith(".json"));
+        if (files == null || files.length == 0) return;
+
+        System.out.println("Parse " + files.length + " Files for Database...");
+
+        Arrays.stream(files).parallel().forEach(file -> {
+            final Patient p = parseSinglePatientFile(file, runEntity);
+            if (p != null) {
+                patientRepository.save(p);
             }
         });
     }
 
-    // Private helper methods for internal operations
 
-    private void addPopulationParameter(ProcessBuilder processBuilder, Integer populationSize) {
-        if (populationSize != null) {
-            processBuilder.command().add("-p");
-            processBuilder.command().add(String.valueOf(populationSize));
-        }
+
+    public void deleteRunFiles(String runId) {
+        storageService.deleteRunData(runId);
     }
 
-    private void addGenderParameter(ProcessBuilder processBuilder, String gender) {
+
+    private void addPopulationParameter(ProcessBuilder pb, Integer size) {
+        if (size != null) { pb.command().add("-p"); pb.command().add(String.valueOf(size)); }
+    }
+
+    private void addGenderParameter(ProcessBuilder pb, String gender) {
         if (gender != null && (gender.equalsIgnoreCase("M") || gender.equalsIgnoreCase("F"))) {
-            processBuilder.command().add("-g");
-            processBuilder.command().add(gender.toUpperCase());
+            pb.command().add("-g"); pb.command().add(gender.toUpperCase());
         }
     }
 
-    private void addAgeParameter(ProcessBuilder processBuilder, Integer minAge, Integer maxAge) {
-        if (minAge != null && maxAge != null) {
-            processBuilder.command().add("-a");
-            processBuilder.command().add(minAge + "-" + maxAge);
-        }
+    private void addAgeParameter(ProcessBuilder pb, Integer min, Integer max) {
+        if (min != null && max != null) { pb.command().add("-a"); pb.command().add(min + "-" + max); }
     }
 
-    private void addLocationParameter(ProcessBuilder processBuilder, String state, String city) {
+    private void addLocationParameter(ProcessBuilder pb, String state, String city) {
         if (state != null && !state.isEmpty()) {
-            processBuilder.command().add(state);
-            if (city != null && !city.isEmpty()) {
-                processBuilder.command().add(city);
+            pb.command().add(state);
+            if (city != null && !city.isEmpty()) pb.command().add(city);
+        }
+    }
+
+    private Patient parseSinglePatientFile(File file, Run runEntity) {
+        try {
+            JsonNode root = objectMapper.readTree(file);
+            JsonNode patientResource = findResourceByType(root, "Patient");
+            if (patientResource == null) return null;
+
+            Patient p = new Patient();
+            p.setRun(runEntity);
+            p.setPatientId(getText(patientResource, "id"));
+            p.setGender(getText(patientResource, "gender"));
+            p.setName(extractName(patientResource));
+            p.setAge(calculateAge(getText(patientResource, "birthDate")));
+            p.setLocation(extractLocation(patientResource));
+            return p;
+        } catch (Exception e) {
+            System.err.println("Fehler beim Parsen von " + file.getName() + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    private JsonNode findResourceByType(JsonNode bundle, String type) {
+        if (!bundle.has("entry")) return null;
+        for (JsonNode entry : bundle.get("entry")) {
+            if (entry.has("resource") && type.equals(getText(entry.get("resource"), "resourceType"))) {
+                return entry.get("resource");
             }
         }
+        return null;
     }
 
-    private String getLatestRunIDFolder() {
-        File outputDir = new File(SYNTHEA_OUTPUT_DIRECTORY + DATAFORMAT_CSV);
-        File[] directories = outputDir.listFiles(File::isDirectory);
-
-        if (directories == null || directories.length == 0) {
-            throw new RuntimeException("No output directory found in: " + outputDir.getAbsolutePath());
-        }
-
-        return Arrays.stream(directories)
-                .max(Comparator.comparingLong(File::lastModified))
-                .orElseThrow(() -> new RuntimeException("Could not find the latest folder."))
-                .getName();
+    private String extractName(JsonNode resource) {
+        if (!resource.has("name")) return "Unknown";
+        JsonNode nameNode = resource.get("name").get(0);
+        String given = nameNode.has("given") ? nameNode.get("given").get(0).asText() : "";
+        String family = getText(nameNode, "family");
+        return (given + " " + family).trim();
     }
 
-    private File zipFolderIfNeeded(String runID, String format) throws IOException {
-        File zipFile = new File(SYNTHEA_OUTPUT_DIRECTORY + format + "/" + runID + "_" + format + ".zip");
-
-        if (zipFile.exists()) {
-            return zipFile;
-        }
-
-        return zipFolder(runID, format);
+    private String extractLocation(JsonNode resource) {
+        if (!resource.has("address")) return "";
+        JsonNode addr = resource.get("address").get(0);
+        String city = getText(addr, "city");
+        String state = getText(addr, "state");
+        if (city != null && state != null) return city + ", " + state;
+        return (city != null) ? city : "";
     }
 
-    private File zipFolder(String runID, String format) throws IOException {
-        File generatedRunFolder = new File(SYNTHEA_OUTPUT_DIRECTORY + format + "/" + runID);
-
-        if (!generatedRunFolder.exists()) {
-            throw new FileNotFoundException("Folder with runID " + runID + " does not exist.");
-        }
-
-        File zippedRunFolder = new File(SYNTHEA_OUTPUT_DIRECTORY + format + "/" + runID + "_" + format + ".zip");
-
-        try (FileOutputStream fos = new FileOutputStream(zippedRunFolder);
-             ZipOutputStream zos = new ZipOutputStream(fos)) {
-
-            for (File file : Objects.requireNonNull(generatedRunFolder.listFiles())) {
-                try (FileInputStream fis = new FileInputStream(file)) {
-                    zos.putNextEntry(new ZipEntry(file.getName()));
-                    fis.transferTo(zos);
-                    zos.closeEntry();
-                }
-            }
-        }
-
-        deleteFolder(generatedRunFolder);
-
-        return zippedRunFolder;
+    private Integer calculateAge(String birthDateStr) {
+        if (birthDateStr == null) return null;
+        try {
+            return Period.between(LocalDate.parse(birthDateStr), LocalDate.now()).getYears();
+        } catch (Exception e) { return 0; }
     }
 
-    private void deleteFolder(File folder) {
-        if (folder.exists() && folder.isDirectory()) {
-            File[] files = folder.listFiles();
-            if (files != null) {
-                for (File file : files) {
-                    file.delete();
-                }
-            }
-            folder.delete();
-        }
+    private String getText(JsonNode node, String field) {
+        return node.has(field) ? node.get(field).asText() : null;
     }
 }

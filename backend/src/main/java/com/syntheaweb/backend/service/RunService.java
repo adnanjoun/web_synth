@@ -71,7 +71,6 @@ public class RunService {
      * @return true if the run was deleted successfully, false if it was not found.
      */
     public boolean deleteRun(String runId) {
-        // Fetch the Run and delete if it exists
         return runRepository.findById(runId).map(run -> {
             runRepository.deleteById(runId);
             syntheaService.deleteRunFiles(runId);

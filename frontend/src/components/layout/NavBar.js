@@ -63,6 +63,19 @@ function Navbar() {
               alignItems: "center",
             }}
           >
+          <mui.Link
+              component={Link}
+              to="/favorites"
+              sx={{
+                  textDecoration: "none",
+                  color: "text.primary",
+                  fontWeight: "bold",
+                  fontSize: "1rem",
+                  "&:hover": { color: "primary.light" },
+              }}
+          >
+              Saved Patients
+          </mui.Link>
             <mui.Link
               component={Link}
               to="/generate"

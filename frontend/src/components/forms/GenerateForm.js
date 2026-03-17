@@ -14,6 +14,7 @@ function GenerateForm({
   downloading,
   generationTime,
   isAgeInvalid,
+  ageErrorMessage,
   isPopulationSizeInvalid,
   isFormInvalid,
 }) {
@@ -87,7 +88,7 @@ function GenerateForm({
               error={isAgeInvalid}
               helperText={
                 isAgeInvalid
-                  ? "Both Min Age and Max Age must be filled correctly."
+                  ? ageErrorMessage
                   : ""
               }
               fullWidth
@@ -107,7 +108,7 @@ function GenerateForm({
               error={isAgeInvalid}
               helperText={
                 isAgeInvalid
-                  ? "Both Min Age and Max Age must be filled correctly."
+                  ? ageErrorMessage
                   : ""
               }
               fullWidth

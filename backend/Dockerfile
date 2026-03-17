@@ -14,7 +14,7 @@ RUN chmod +x gradlew
 RUN ./gradlew bootJar --no-daemon
 
 
-FROM openjdk:17-jdk-alpine
+FROM amazoncorretto:17
 
 WORKDIR /app
 
