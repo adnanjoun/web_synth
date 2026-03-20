@@ -80,7 +80,7 @@ const FavoritePatientsPage = () => {
 
     const handleDownload = async (target, format) => {
         try {
-            let url = `http://localhost:8080/api/favorites/download?format=${format}`;
+            let url = `/api/favorites/download?format=${format}`;
             console.log('SELECTED: ' + selected)
             if (target === "selected") {
                 url += `&ids=${selected.join(",")}`;

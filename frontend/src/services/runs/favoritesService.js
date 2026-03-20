@@ -1,5 +1,5 @@
 
-const API_URL = "http://localhost:8080/api/favorites";
+const API_URL = "/api/favorites";
 
 const getAuthHeader = () => {
     const token = localStorage.getItem("token");

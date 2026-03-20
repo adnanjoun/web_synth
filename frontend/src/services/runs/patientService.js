@@ -6,7 +6,7 @@ import { ExaminationParser } from "../parsers/ExaminationParser";
 import { CarePlanParser } from "../parsers/CarePlanParser";
 import { BillingParser } from "../parsers/BillingParser";
 
-const BASE_URL = "http://localhost:8080/api";
+const BASE_URL = "/api";
 
 
 const getPatientsByRunId = async (runId, page = 0, size = 50, filters = {}) => {

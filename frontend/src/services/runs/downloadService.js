@@ -35,14 +35,14 @@ const fetchBlob = async (url) => {
 };
 
 const downloadRunExport = async (runId, format = "fhir") => {
-    const url = `http://localhost:8080/api/synthea/download?runID=${runId}&format=${format}`;
+    const url = `/api/synthea/download?runID=${runId}&format=${format}`;
     const { blob, filename } = await fetchBlob(url);
     triggerBrowserDownload(blob, filename || `${runId}_${format}.zip`);
 };
 
 const downloadPatientsFromRun = async (runId, patientIds, format = "fhir", filenameOverride = null) => {
     const idsParam = patientIds.join(",");
-    const url = `http://localhost:8080/api/synthea/downloadSelected?runID=${runId}&format=${format}&patientIds=${idsParam}`;
+    const url = `/api/synthea/downloadSelected?runID=${runId}&format=${format}&patientIds=${idsParam}`;
 
     const { blob, filename } = await fetchBlob(url);
 
@@ -52,7 +52,7 @@ const downloadPatientsFromRun = async (runId, patientIds, format = "fhir", filen
 };
 
 const downloadFavorites = async (dbIds = [], format = "fhir") => {
-    let url = `http://localhost:8080/api/favorites/download?format=${format}`;
+    let url = `/api/favorites/download?format=${format}`;
     if (dbIds.length > 0) {
         url += `&ids=${dbIds.join(",")}`;
     }
