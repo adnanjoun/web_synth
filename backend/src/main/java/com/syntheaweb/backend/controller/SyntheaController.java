@@ -64,7 +64,7 @@ public class SyntheaController {
      * @return ResponseEntity containing a success message and the generated run ID, or an error message if the process fails.
      */
     @PostMapping("/generate")
-    public ResponseEntity<SyntheaApiResponse> generateSyntheticData(@RequestBody SyntheaParameterBody requestBody) {
+    public ResponseEntity<SyntheaApiResponse> generateSyntheticData(@RequestBody SyntheaParameterBody requestBody) throws IOException, InterruptedException{
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -95,18 +95,12 @@ public class SyntheaController {
             runRepository.save(run);
 
             // Generate and return the generated run ID
-            syntheaService.generateSyntheticData(
-                    runId,
-                    requestBody.getPopulationSize(),
-                    requestBody.getGender(),
-                    requestBody.getMinAge(),
-                    requestBody.getMaxAge(),
-                    requestBody.getState(),
-                    requestBody.getCity()
-            );
-            syntheaService.parseAndPersistPatients(runId, run);
-            return ResponseEntity.ok(new SyntheaApiResponse("Generating was successful!", runId));
-        } catch (IOException | InterruptedException e) {
+            // In this version we now move the stuff to async to surpase POST 
+            // limitations on university server (1min limit)
+            syntheaService.runFullGenerationProcess(run);
+
+            return ResponseEntity.ok(new SyntheaApiResponse("Generating was started!", runId));
+        } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new SyntheaApiResponse("Error while generating: " + e.getMessage(), null));
         }

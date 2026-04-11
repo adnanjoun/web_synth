@@ -4,10 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.syntheaweb.backend.database.entity.Patient;
 import com.syntheaweb.backend.database.entity.Run;
+import com.syntheaweb.backend.database.entity.RunStatus;
 import com.syntheaweb.backend.database.repository.PatientRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import com.syntheaweb.backend.service.StorageService;
+import org.springframework.scheduling.annotation.Async; 
+import com.syntheaweb.backend.database.repository.RunRepository; 
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -31,7 +34,35 @@ public class SyntheaService {
     @Autowired
     private StorageService storageService;
 
+    @Autowired
+    private RunRepository runRepository;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Async
+    public void runFullGenerationProcess(Run run)  {
+        try {
+            runRepository.updateRunStatus(run.getRunId(), RunStatus.RUNNING);
+
+            this.generateSyntheticData(
+                run.getRunId(),
+                run.getPopulationSize(),
+                run.getGender(),
+                run.getMinAge(),
+                run.getMaxAge(),
+                run.getState(),
+                run.getCity()
+            );
+
+            this.parseAndPersistPatients(run.getRunId(), run);
+
+            runRepository.updateRunStatus(run.getRunId(), RunStatus.SUCCESS);
+
+        } catch (Exception e) {
+            runRepository.updateRunStatus(run.getRunId(), RunStatus.FAILED);
+            e.printStackTrace();
+        }
+    }
 
     public void generateSyntheticData(String runId, Integer populationSize, String gender, Integer minAge, Integer maxAge, String state, String city) throws IOException, InterruptedException {
         ProcessBuilder processBuilder = new ProcessBuilder("./run_synthea");

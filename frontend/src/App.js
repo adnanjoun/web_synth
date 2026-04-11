@@ -32,7 +32,7 @@ function App() {
       <ThemeProvider theme={theme}>
         <SnackbarProvider>
           <CssBaseline />
-          <Router>
+          <Router basename='syntheaweb'>
             <mui.Box
               sx={{
                 display: "flex",

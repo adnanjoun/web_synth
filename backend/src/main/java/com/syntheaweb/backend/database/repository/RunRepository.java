@@ -5,10 +5,14 @@ import java.util.UUID;
 
 import com.syntheaweb.backend.database.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.repository.query.Param; 
+import org.springframework.transaction.annotation.Transactional;
 
 import com.syntheaweb.backend.database.entity.Run;
+import com.syntheaweb.backend.database.entity.RunStatus;
 
 /**
  * Repository interface for managing Runs in the database.
@@ -38,5 +42,10 @@ public interface RunRepository extends JpaRepository<Run, String> {
      * @param user The user whose runs should be deleted
      */
     void deleteByUser(User user);
+    
+    @Modifying
+    @Transactional
+    @Query("UPDATE Run r SET r.status = :status WHERE r.runId = :runId")
+    void updateRunStatus(@Param("runId") String runId, @Param("status") RunStatus status);
 
 }
