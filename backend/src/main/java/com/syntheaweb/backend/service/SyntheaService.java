@@ -58,7 +58,7 @@ public class SyntheaService {
 
             runRepository.updateRunStatus(run.getRunId(), RunStatus.SUCCESS);
 
-        } catch (Exception e) {
+        } catch (Throwable e) {
             runRepository.updateRunStatus(run.getRunId(), RunStatus.FAILED);
             e.printStackTrace();
         }
@@ -75,7 +75,8 @@ public class SyntheaService {
         processBuilder.redirectErrorStream(true);
         Process process = processBuilder.start();
 
-        /*
+        // Todo: disable logs in production
+        /* 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -83,6 +84,7 @@ public class SyntheaService {
             }
         }
         */
+        
 
         int exitCode = process.waitFor();
         if (exitCode != 0) {

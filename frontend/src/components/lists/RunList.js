@@ -219,7 +219,7 @@ const run = runs.find(r => r.runId === selectedRunId);    if (selectedRunId) {
                           color: "background.default",
                         },
                       }}
-                      onClick={() => onDelete(run.runId)}
+                      onClick={() => onDelete(run)}
                     >
                       <Delete />
                     </mui.IconButton>

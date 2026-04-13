@@ -15,6 +15,7 @@ function GenerateForm({
   ageErrorMessage,
   isPopulationSizeInvalid,
   isFormInvalid,
+  maxPopulationSize
 }) {
   const { populationSize, gender, minAge, maxAge, state, city } =
     generateOptions;
@@ -48,7 +49,7 @@ function GenerateForm({
               error={isPopulationSizeInvalid}
               helperText={
                 isPopulationSizeInvalid
-                  ? "Population size must be greater than 0"
+                  ? `Population size must be between 0 and ${maxPopulationSize}`
                   : ""
               }
               fullWidth

@@ -73,9 +73,11 @@ function GeneratePage() {
    * isPopulationSizeInvalid
    * True if populationSize is not empty AND <= 0.
    */
+  const maxPopulationSz = 10*1000;
+  const nPopulationSz = parseInt(generateOptions.populationSize);
   const isPopulationSizeInvalid =
     generateOptions.populationSize !== "" &&
-    parseInt(generateOptions.populationSize) <= 0;
+      0 < nPopulationSz  &&  nPopulationSz > maxPopulationSz;
 
   /**
    * isFormInvalid
@@ -116,7 +118,7 @@ function GeneratePage() {
 
       setRunID(response.data.runID);
       showSnackbar(
-        "Synthetic data generated and saved successfully!",
+        "Synthetic data generation started successfully! View the current status on the run overview page.",
         "success"
       );
     } catch (error) {
@@ -151,6 +153,7 @@ function GeneratePage() {
         isPopulationSizeInvalid={isPopulationSizeInvalid}
         isFormInvalid={isFormInvalid}
         navigateRunOverview={navigateRunOverview}
+        maxPopulationSize={maxPopulationSz}
       />
     </Layout>
   );

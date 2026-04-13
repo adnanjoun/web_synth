@@ -60,8 +60,9 @@ const RunOverviewPage = () => {
 
 
 
-  const openDeleteDialog = (runId) => {
-    setRunToDelete(runId);
+  const openDeleteDialog = (run) => {
+    if (!checkRunHasData(run)) return;
+    setRunToDelete(run.runId);
     setDeleteDialogOpen(true);
   };
 
