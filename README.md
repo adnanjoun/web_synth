@@ -24,6 +24,68 @@ SyntheaWeb is a web-based platform, developed at the Medical University of Vienn
 
 SyntheaWeb converts the HL7® FHIR® R4 bundles produced by Synthea into tables of the OHDSI OMOP Common Data Model (CDM) v5.4. Each run's bundles are parsed with HAPI FHIR, checked by a minimal validation step, mapped resource by resource, stored in the backend database and exported as one CSV file per table in a ZIP archive.
 
+### Conversion overview
+
+```mermaid
+flowchart LR
+    SYN(["Synthea run"]) --> BUN["FHIR R4 Bundles<br/>one per patient"]
+    BUN --> PARSE["Parse<br/>HAPI FHIR 6.10"]
+    PARSE --> VAL{"Validate<br/>required elements"}
+    VAL -. "incomplete: skip + log" .-> DROP(["discarded"])
+
+    subgraph FHIR["FHIR R4 resources"]
+        direction TB
+        PAT["<b>Patient</b><br/>birthDate · gender"]
+        ENC["<b>Encounter</b><br/>class · period"]
+        CON["<b>Condition</b><br/>code · onsetDateTime"]
+        OBS["<b>Observation</b><br/>code · effectiveDateTime · valueQuantity"]
+        MED["<b>MedicationRequest</b><br/>medicationCodeableConcept · authoredOn"]
+    end
+
+    subgraph OMOP["OMOP CDM v5.4 tables · PostgreSQL, per run"]
+        direction TB
+        PER["<b>PERSON</b><br/>year/month/day_of_birth · gender_concept_id"]
+        VIS["<b>VISIT_OCCURRENCE</b><br/>visit_concept_id · visit_start/end_datetime"]
+        COND["<b>CONDITION_OCCURRENCE</b><br/>condition_concept_id · condition_start_datetime"]
+        MEAS["<b>MEASUREMENT</b><br/>measurement_concept_id · value_as_number · unit_concept_id"]
+        DRUG["<b>DRUG_EXPOSURE</b><br/>drug_concept_id · drug_exposure_start/end_datetime"]
+        OP["<b>OBSERVATION_PERIOD</b><br/>observation_period_start/end_date"]
+    end
+
+    subgraph VOCAB["Concept mapping · decoupled from conversion"]
+        direction TB
+        CSV[("concept-mappings.csv<br/>(code system, code) → concept_id<br/>SNOMED CT · LOINC · RxNorm · HL7 v3 ActCode")]
+        RULES["Fixed rules<br/>gender · UCUM units · type concepts"]
+        ZERO["no match → concept_id = 0"]
+        CSV -.-> ZERO
+    end
+
+    VAL --> FHIR
+    PAT ==>|"1 · PersonMapper"| PER
+    ENC ==>|"2 · VisitOccurrenceMapper"| VIS
+    CON ==>|"2 · ConditionOccurrenceMapper"| COND
+    OBS ==>|"2 · MeasurementMapper"| MEAS
+    MED ==>|"2 · DrugExposureMapper"| DRUG
+    FHIR -.->|"3 · earliest / latest event date"| OP
+
+    VOCAB -. "concept_id" .-> OMOP
+    OMOP --> ZIP(["ZIP export<br/>one CSV per table"])
+
+    style FHIR fill:#fffafa,stroke:#c0392b
+    style OMOP fill:#f7fbff,stroke:#2b6cb0
+    style VOCAB fill:#fffdf5,stroke:#b7791f
+    classDef fhir fill:#fdecea,stroke:#c0392b,color:#1a1a1a
+    classDef omop fill:#e8f1fb,stroke:#2b6cb0,color:#1a1a1a
+    classDef vocab fill:#fff6e0,stroke:#b7791f,color:#1a1a1a
+    classDef step fill:#f2f2f2,stroke:#555,color:#1a1a1a
+    class PAT,ENC,CON,OBS,MED fhir
+    class PER,VIS,COND,MEAS,DRUG,OP omop
+    class CSV,RULES,ZERO vocab
+    class SYN,BUN,PARSE,VAL,DROP,ZIP step
+```
+
+Processing order per bundle: **(1)** `Patient` resources are mapped first, so that **(2)** `Encounter`, `Condition`, `Observation` and `MedicationRequest` resources can resolve their `subject` reference to the corresponding `person_id`; **(3)** after all events are mapped, one `OBSERVATION_PERIOD` per person is derived from the earliest and latest event date. Resources lacking required elements are skipped and logged. Concept identifiers are supplied by the decoupled concept-mapping layer.
+
 ### Resource-to-table mapping
 
 | FHIR R4 resource | OMOP CDM table | Mapped elements (FHIR → OMOP) | Type concept |
