@@ -142,5 +142,5 @@ SyntheaWeb is developed at the Institute of Medical Information Management, Cent
 **Content and scientific quality**
 
 - Maximilian Schubert
-- Florian Katsch
-- Georg Duftschmid
+- Dr. Florian Katsch
+- Prof. Dr. Georg Duftschmid
