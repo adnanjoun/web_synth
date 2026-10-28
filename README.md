@@ -40,6 +40,34 @@ Source codes are resolved to OMOP `concept_id`s using the key `coding.system | c
 
 Implementation: [`backend/src/main/java/com/syntheaweb/backend/mapperFhir/`](backend/src/main/java/com/syntheaweb/backend/mapperFhir/), [`FhirService`](backend/src/main/java/com/syntheaweb/backend/service/FhirService.java), [`ConceptMappingService`](backend/src/main/java/com/syntheaweb/backend/service/ConceptMappingService.java).
 
+## AI-Generated Patient Summaries
+
+*Developed by Elena Kappel.*
+
+SyntheaWeb can generate a short clinical summary for each synthetic patient using a locally hosted large language model (LLM). No patient data leaves the deployment.
+
+### Architecture
+
+- **Spring Boot backend** (`/api/ai/summaries/generate`, single or bulk): creates a summary record with status `PENDING` and runs generation asynchronously, so long inference times do not cause request timeouts. On completion the record is set to `COMPLETED` (or `FAILED`), and the frontend polls this status.
+- **Python AI service** ([`ai_service/`](ai_service/), FastAPI, Hugging Face Transformers, `POST /summarize`): loads the model once at startup and keeps it in memory. Models are selected through an enum/registry pattern, so the service is model-agnostic. The current model is **MedGemma**, loaded from `ai_service/models/medgemma`.
+- **Decoding** is greedy (`do_sample=False`, at most 512 new tokens), so the same input always produces the same summary.
+
+### Input preparation
+
+Raw FHIR bundles are too large and too deeply nested to fit in the model's context window. Truncating or blindly compressing the JSON led to missed clinical events and hallucinations. Instead, [`FhirExtractionService`](backend/src/main/java/com/syntheaweb/backend/service/FhirExtractionService.java) builds a compact, structured text snapshot for each patient:
+
+| Snapshot section | Source | Filter |
+|---|---|---|
+| Demographics (name, age, gender, location) | SyntheaWeb database | — |
+| Active diagnoses | FHIR `Condition` | `clinicalStatus = active` |
+| Current medications | FHIR `MedicationRequest` | `status = active` |
+| Encounters and procedures | FHIR `Encounter`, `Procedure` | excludes cancelled / entered-in-error / not-done |
+| Allergies | FHIR `AllergyIntolerance` | `clinicalStatus = active` |
+| Observations and vitals | FHIR `Observation` (value, unit, date) | excludes cancelled / entered-in-error |
+| Immunizations | FHIR `Immunization` | excludes not-done / entered-in-error |
+
+Each section keeps at most the 20 most recent entries. Age is taken from the database rather than calculated by the model. The snapshot is placed into a fixed prompt ([`ai_service/assets/summarize-prompt.txt`](ai_service/assets/summarize-prompt.txt)), which asks for one sentence each on demographics, active diagnoses, current medications, key medical history and allergies. The service additionally caps the input at 8,000 characters to stay within memory limits.
+
 ## Installation & Setup
 
 ### Prerequisites
