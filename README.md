@@ -12,6 +12,27 @@ SyntheaWeb is a platform developed for the Medical University of Vienna to simpl
 - **Support for Research & Education** – Promote advancements in healthcare and data science while ensuring compliance with privacy regulations.
 - **Fully Containerized Deployment** – Runs via Docker without requiring manual installation of dependencies.
 
+## FHIR to OMOP CDM Mapping
+
+SyntheaWeb converts the HL7® FHIR® R4 bundles produced by Synthea into tables of the OHDSI OMOP Common Data Model (CDM) v5.4. Each run's bundles are parsed with HAPI FHIR, checked by a minimal validation step, mapped resource by resource, stored in the backend database and exported as one CSV file per table in a ZIP archive.
+
+### Resource-to-table mapping
+
+| FHIR R4 resource | OMOP CDM table | Mapped elements (FHIR → OMOP) | Type concept |
+|---|---|---|---|
+| `Patient` | `PERSON` | `birthDate` → `year_of_birth`, `month_of_birth`, `day_of_birth`; `gender` → `gender_concept_id` | — |
+| `Condition` | `CONDITION_OCCURRENCE` | `onsetDateTime` (fallback: `recordedDate`) → `condition_start_date[time]`; `code.coding[0]` → `condition_concept_id` | 32817 (EHR) |
+| `Observation` | `MEASUREMENT` | `effectiveDateTime` → `measurement_date[time]`; `code.coding[0]` → `measurement_concept_id`, `measurement_source_value`; `valueQuantity.value` → `value_as_number`; `valueQuantity.code` (UCUM) → `unit_concept_id` | 32856 (Lab result) |
+| `Encounter` | `VISIT_OCCURRENCE` | `period.start`/`period.end` → `visit_start/end_date[time]`; `class` (v3-ActCode) → `visit_concept_id` | 32817 (EHR) |
+| `MedicationRequest` | `DRUG_EXPOSURE` | `authoredOn` → `drug_exposure_start_date[time]`; `dispenseRequest.validityPeriod.end` (fallback: `authoredOn`) → `drug_exposure_end_date[time]`; `medicationCodeableConcept.coding[0]` → `drug_concept_id` | 38000177 (Prescription written) |
+| *(derived)* | `OBSERVATION_PERIOD` | per person: earliest and latest date across the mapped `Condition`, `Observation`, `Encounter` and `MedicationRequest` resources → `observation_period_start/end_date` | 44814724 (Period covering healthcare encounters) |
+
+### Vocabulary mapping
+
+Source codes are resolved to OMOP `concept_id`s using the key `coding.system | coding.code`. The lookup table is [`backend/src/main/resources/concept-mappings.csv`](backend/src/main/resources/concept-mappings.csv), which covers selected SNOMED CT (conditions), LOINC (measurements), RxNorm (drugs) and HL7 v3 ActCode (encounter class: `IMP` → 9201 Inpatient Visit, `AMB` → 9202 Outpatient Visit, `EMER` → 9203 Emergency Room Visit, `VR`). Administrative gender (`male` 8507, `female` 8532, `other` 8551) and UCUM units are mapped by fixed tables in `ConceptMappingService`. Any code that has no mapping gets `concept_id = 0` (No matching concept), as the OMOP conventions require.
+
+Implementation: [`backend/src/main/java/com/syntheaweb/backend/mapperFhir/`](backend/src/main/java/com/syntheaweb/backend/mapperFhir/), [`FhirService`](backend/src/main/java/com/syntheaweb/backend/service/FhirService.java), [`ConceptMappingService`](backend/src/main/java/com/syntheaweb/backend/service/ConceptMappingService.java).
+
 ## Installation & Setup
 
 ### Prerequisites
