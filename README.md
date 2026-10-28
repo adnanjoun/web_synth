@@ -129,6 +129,18 @@ This work is licensed under the [Apache License 2.0](LICENSE). If you use Synthe
 
 SyntheaWeb is developed at the Institute of Medical Information Management, Center for Medical Data Science, Medical University of Vienna.
 
-- **Dr. Adnan Jouned** – main supervisor
-- **Emília Matonoková** – FHIR to OMOP CDM pipeline
-- **Elena Kappel** – AI-generated patient summaries
+**Main supervisor**
+
+- Dr. Adnan Jouned
+
+**Development**
+
+- Osman Cirak – initial implementation of the SyntheaWeb platform
+- Elena Kappel – platform extension, bug fixes, asynchronous Synthea generation and AI-generated patient summaries
+- Emília Matonoková – FHIR to OMOP CDM pipeline (ingestion, mapping, export and frontend integration)
+
+**Content and scientific quality**
+
+- Maximilian Schubert
+- Florian Katsch
+- Georg Duftschmid
